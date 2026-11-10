@@ -1,0 +1,8 @@
+node_modules/
+frontend/dist/
+.deps/
+package/
+npm-runtime.tgz
+data/
+__pycache__/
+*.pyc
