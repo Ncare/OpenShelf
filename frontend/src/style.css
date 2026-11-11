@@ -76,3 +76,5 @@
 .candidate-carousel{display:flex;align-items:center;gap:8px;min-width:0}.candidate-carousel .candidates{flex:1;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding-bottom:5px}.candidate-carousel>.ant-btn{flex:none}
 
 .catalog-more{text-align:center;padding:24px;color:#849188;font-size:13px}
+
+.catalog-skeleton{min-height:220px;pointer-events:none}.catalog-skeleton .ant-card-body{padding:20px}.grid .catalog-skeleton{animation:soft-fade .2s ease both}.catalog-more{min-height:72px;transition:color .2s ease}.grid .project-card:not(.catalog-skeleton){animation:catalog-card-in .38s ease-out both}@keyframes catalog-card-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}@media(prefers-reduced-motion:reduce){.grid .project-card{animation:none!important}}
