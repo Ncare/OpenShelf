@@ -161,11 +161,11 @@ function Main() {
         catch (e) { message.error((e as Error).message); }
         return false;
     };
-    const list = (admin ? projects : catalogItems).filter(p => (!category || p.category === category) && (!platform || p.platforms.includes(platform)) && (p.name + p.description + p.tags.join(' ')).toLowerCase().includes(query.toLowerCase()));
+    const list = (admin ? projects : catalogItems).filter(p => (!category || p.category === category) && (!platform || p.platforms.some(value => value.toLowerCase().includes(platform.toLowerCase()))) && (p.name + p.description + p.tags.join(' ')).toLowerCase().includes(query.toLowerCase()));
     const columns = [
         { title: '软件', dataIndex: 'name', render: (_: unknown, p: Project) => <div><strong>{p.name}</strong><div className="muted ellipsis">{p.description}</div></div> },
         { title: '分类', dataIndex: 'category', width: 160, render: (v: string) => <span style={{whiteSpace:'nowrap'}}>{v || '待分类'}</span> },
-        { title: '平台', dataIndex: 'platforms', filters: platformOptions.map(option => ({text: option.value, value: option.value})), onFilter: (value: React.Key | boolean, p: Project) => p.platforms.includes(String(value)), render: (v: string[]) => v.join('、') },
+        { title: '平台', dataIndex: 'platforms', filters: platformOptions.map(option => ({text: option.value, value: option.value})), onFilter: (value: React.Key | boolean, p: Project) => p.platforms.some(platform => platform.toLowerCase().includes(String(value).toLowerCase())), render: (v: string[]) => v.join('、') },
         { title: '状态', dataIndex: 'published', filters: [{text: '已发布', value: 'published'}, {text: '未发布', value: 'draft'}], onFilter: (value: React.Key | boolean, p: Project) => p.published === (value === 'published'), render: (_: unknown, p: Project) => <Tag color={p.published ? 'success' : 'default'}>{p.published ? '已发布' : '未发布'}</Tag> },
         { title: '操作', render: (_: unknown, p: Project) => <Space size={2}><Tooltip title="编辑"><Button type="text" aria-label="编辑" icon={<EditOutlined />} onClick={() => openProject(p)} /></Tooltip><Tooltip title="刷新仓库信息"><Button type="text" aria-label="刷新仓库信息" icon={<ReloadOutlined />} onClick={() => refresh(p)} /></Tooltip><Tooltip title={p.published ? '取消发布' : '发布'}><Button type="text" aria-label={p.published ? '取消发布' : '发布'} icon={p.published ? <EyeInvisibleOutlined /> : <EyeOutlined />} onClick={() => changePublish(p)} /></Tooltip><Popconfirm title="确定删除这条软件记录？" onConfirm={() => remove(p.id!)} okText="删除" cancelText="取消"><Tooltip title="删除"><Button type="text" danger aria-label="删除" icon={<DeleteOutlined />} /></Tooltip></Popconfirm></Space> }
     ];

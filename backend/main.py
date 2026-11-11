@@ -121,7 +121,7 @@ def catalog(offset: int = 0, limit: int = 20, q: str = '', category: str = '', p
         conditions.append('category = ?')
         args.append(category)
     if platform:
-        conditions.append('EXISTS (SELECT 1 FROM json_each(projects.platforms) WHERE json_each.value = ?)')
+        conditions.append('EXISTS (SELECT 1 FROM json_each(projects.platforms) WHERE instr(lower(json_each.value), lower(?)) > 0)')
         args.append(platform)
     with db() as conn:
         rows = conn.execute('SELECT * FROM projects WHERE ' + ' AND '.join(conditions) + ' ORDER BY id DESC LIMIT ? OFFSET ?', [*args, limit + 1, offset]).fetchall()
