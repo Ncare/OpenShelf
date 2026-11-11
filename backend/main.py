@@ -421,37 +421,38 @@ def save_image(data: bytes, max_size: int = 5 * 1024 * 1024):
             if re.search(br'<!\s*(?:DOCTYPE|ENTITY)\b', data, re.I) or len(data) > max_size:
                 raise ValueError('unsupported declaration')
             root = ET.fromstring(data)
-            allowed_tags = {'svg', 'g', 'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'defs', 'linearGradient', 'radialGradient', 'stop', 'clipPath', 'mask', 'title', 'desc'}
-            allowed_attrs = {'viewBox', 'width', 'height', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'd', 'points', 'fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-opacity', 'opacity', 'transform', 'id', 'offset', 'stop-color', 'stop-opacity', 'clip-path', 'mask', 'gradientUnits', 'gradientTransform', 'preserveAspectRatio', 'version'}
-            if root.tag != '{http://www.w3.org/2000/svg}svg':
+            allowed_tags = {'svg', 'g', 'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'defs', 'linearGradient', 'radialGradient', 'stop', 'clipPath', 'mask', 'title', 'desc', 'use', 'symbol', 'pattern', 'text', 'tspan'}
+            allowed_attrs = {'viewBox', 'width', 'height', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'd', 'points', 'fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-opacity', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-miterlimit', 'opacity', 'transform', 'id', 'offset', 'stop-color', 'stop-opacity', 'clip-path', 'clip-rule', 'mask', 'gradientUnits', 'gradientTransform', 'spreadMethod', 'preserveAspectRatio', 'version', 'href', 'font-size', 'font-family', 'font-weight', 'text-anchor', 'dominant-baseline', 'patternUnits', 'patternTransform'}
+            svg_ns = '{http://www.w3.org/2000/svg}'
+            if root.tag != svg_ns + 'svg':
                 raise ValueError('not svg')
-            def clean_metadata(element):
+            def safe_value(name, value):
+                value = value.strip()
+                if name == 'href':
+                    return bool(re.fullmatch(r'#[A-Za-z0-9_.:-]+', value))
+                if any(x in value.lower() for x in ('javascript:', 'data:', 'http:', 'https:', '@import', 'expression', '\\')):
+                    return False
+                return 'url(' not in value.lower() or bool(re.fullmatch(r'url\(#[A-Za-z0-9_.:-]+\)', value))
+            def sanitize(element):
                 for child in list(element):
-                    if child.tag == '{http://www.w3.org/2000/svg}metadata' or child.tag.startswith('{http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd}'):
+                    if not isinstance(child.tag, str) or not child.tag.startswith(svg_ns) or child.tag[len(svg_ns):] not in allowed_tags:
                         element.remove(child)
                     else:
-                        clean_metadata(child)
-                for key in list(element.attrib):
-                    if key.startswith('{http://www.inkscape.org/namespaces/inkscape}') or key.startswith('{http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd}'):
-                        del element.attrib[key]
-                style = element.attrib.pop('style', '')
-                if style:
-                    for declaration in style.split(';'):
-                        if not declaration.strip():
-                            continue
-                        if ':' not in declaration:
-                            raise ValueError('unsupported style')
+                        sanitize(child)
+                attrs = dict(element.attrib)
+                element.attrib.clear()
+                style = attrs.pop('style', '')
+                for declaration in style.split(';'):
+                    if ':' in declaration:
                         name, value = (part.strip() for part in declaration.split(':', 1))
-                        if name not in allowed_attrs or not re.fullmatch(r'[A-Za-z0-9#.,%+() _-]+', value):
-                            raise ValueError('unsupported style')
-                        element.attrib[name] = value
-            clean_metadata(root)
-            for element in root.iter():
-                if not element.tag.startswith('{http://www.w3.org/2000/svg}') or element.tag.split('}', 1)[1] not in allowed_tags:
-                    raise ValueError('unsupported element')
-                for key, value in element.attrib.items():
-                    if key not in allowed_attrs or ('url(' in value.lower() and not re.fullmatch(r'url\(#[A-Za-z0-9_.:-]+\)', value)) or any(x in value.lower() for x in ('javascript:', 'data:', 'http:', 'https:')):
-                        raise ValueError('unsupported attribute')
+                        if name in allowed_attrs and safe_value(name, value):
+                            element.set(name, value)
+                for name, value in attrs.items():
+                    if name == '{http://www.w3.org/1999/xlink}href':
+                        name = 'href'
+                    if name in allowed_attrs and safe_value(name, value):
+                        element.set(name, value)
+            sanitize(root)
             data = ET.tostring(root, encoding='utf-8', xml_declaration=True)
             suffix = '.svg'
         except (ET.ParseError, ValueError):
