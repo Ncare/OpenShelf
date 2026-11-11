@@ -108,6 +108,25 @@ def projects(published: bool = False):
         rows = conn.execute('SELECT * FROM projects' + (' WHERE published = 1' if published else '') + ' ORDER BY id DESC').fetchall()
     return [row_project(r) for r in rows]
 
+@app.get('/api/catalog')
+def catalog(offset: int = 0, limit: int = 20, q: str = '', category: str = '', platform: str = ''):
+    if offset < 0 or limit < 1 or limit > 100:
+        raise HTTPException(400, '分页参数无效')
+    conditions = ['published = 1']
+    args = []
+    if q.strip():
+        conditions.append("(instr(lower(name), lower(?)) > 0 OR instr(lower(description), lower(?)) > 0 OR EXISTS (SELECT 1 FROM json_each(projects.tags) WHERE instr(lower(json_each.value), lower(?)) > 0))")
+        args.extend([q.strip()] * 3)
+    if category:
+        conditions.append('category = ?')
+        args.append(category)
+    if platform:
+        conditions.append('EXISTS (SELECT 1 FROM json_each(projects.platforms) WHERE json_each.value = ?)')
+        args.append(platform)
+    with db() as conn:
+        rows = conn.execute('SELECT * FROM projects WHERE ' + ' AND '.join(conditions) + ' ORDER BY id DESC LIMIT ? OFFSET ?', [*args, limit + 1, offset]).fetchall()
+    return {'items': [row_project(row) for row in rows[:limit]], 'has_more': len(rows) > limit}
+
 @app.post('/api/projects')
 def create_project(project: Project):
     project.repo = normalize_repo(project.repo)

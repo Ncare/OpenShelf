@@ -74,3 +74,5 @@
 .project-modal .ant-modal-content{height:auto;max-height:calc(100dvh - 32px)}.project-modal .ant-modal-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior-y:contain;touch-action:pan-y}.project-modal .ant-modal-header,.project-modal .ant-modal-footer{flex-shrink:0}@media(max-width:520px){.project-modal .ant-modal-content{max-height:calc(100dvh - 16px)}}
 
 .candidate-carousel{display:flex;align-items:center;gap:8px;min-width:0}.candidate-carousel .candidates{flex:1;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding-bottom:5px}.candidate-carousel>.ant-btn{flex:none}
+
+.catalog-more{text-align:center;padding:24px;color:#849188;font-size:13px}
