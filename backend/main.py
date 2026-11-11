@@ -108,24 +108,126 @@ def projects(published: bool = False):
         rows = conn.execute('SELECT * FROM projects' + (' WHERE published = 1' if published else '') + ' ORDER BY id DESC').fetchall()
     return [row_project(r) for r in rows]
 
-@app.get('/api/catalog')
-def catalog(offset: int = 0, limit: int = 20, q: str = '', category: str = '', platform: str = ''):
-    if offset < 0 or limit < 1 or limit > 100:
-        raise HTTPException(400, '分页参数无效')
+
+def search_terms(value):
+    return list(dict.fromkeys(term.casefold() for term in re.split(r'\s+', value.strip()) if term))
+
+
+def catalog_conditions(q='', category='', platform=''):
     conditions = ['published = 1']
     args = []
-    if q.strip():
-        conditions.append("(instr(lower(name), lower(?)) > 0 OR instr(lower(description), lower(?)) > 0 OR EXISTS (SELECT 1 FROM json_each(projects.tags) WHERE instr(lower(json_each.value), lower(?)) > 0))")
-        args.extend([q.strip()] * 3)
+    terms = search_terms(q)
+    searchable = (
+        "coalesce(name, '') || ' ' || coalesce(description, '') || ' ' || "
+        "coalesce(category, '') || ' ' || coalesce(platforms, '') || ' ' || "
+        "coalesce(tags, '') || ' ' || coalesce(repo, '')"
+    )
+    for term in terms:
+        conditions.append(f'instr(lower({searchable}), ?) > 0')
+        args.append(term)
     if category:
         conditions.append('category = ?')
         args.append(category)
     if platform:
         conditions.append('EXISTS (SELECT 1 FROM json_each(projects.platforms) WHERE instr(lower(json_each.value), lower(?)) > 0)')
         args.append(platform)
+    return conditions, args, terms
+
+
+@app.get('/api/catalog/meta')
+def catalog_meta():
     with db() as conn:
-        rows = conn.execute('SELECT * FROM projects WHERE ' + ' AND '.join(conditions) + ' ORDER BY id DESC LIMIT ? OFFSET ?', [*args, limit + 1, offset]).fetchall()
-    return {'items': [row_project(row) for row in rows[:limit]], 'has_more': len(rows) > limit}
+        total = conn.execute('SELECT count(*) FROM projects WHERE published = 1').fetchone()[0]
+        categories = [
+            dict(row)
+            for row in conn.execute(
+                'SELECT category AS name, count(*) AS count FROM projects '
+                "WHERE published = 1 AND category <> '' "
+                'GROUP BY category ORDER BY count DESC, category'
+            )
+        ]
+        platforms = [
+            dict(row)
+            for row in conn.execute(
+                'SELECT json_each.value AS value, count(*) AS count '
+                'FROM projects, json_each(projects.platforms) '
+                'WHERE projects.published = 1 AND json_each.value <> \'\' '
+                'GROUP BY json_each.value ORDER BY count DESC, json_each.value'
+            )
+        ]
+    return {'total': total, 'categories': categories, 'platforms': platforms}
+
+
+@app.get('/api/catalog/suggestions')
+def catalog_suggestions(q: str = '', limit: int = 6):
+    if not q.strip() or limit < 1 or limit > 10:
+        return {'items': []}
+    conditions, args, _ = catalog_conditions(q)
+    phrase = q.strip()
+    rows = None
+    with db() as conn:
+        rows = conn.execute(
+            'SELECT name, category, repo FROM projects WHERE '
+            + ' AND '.join(conditions)
+            + ' ORDER BY CASE WHEN lower(name) = lower(?) THEN 0 ELSE 1 END, '
+            'CASE WHEN lower(name) LIKE lower(?) || \'%\' THEN 0 ELSE 1 END, '
+            'CASE WHEN instr(lower(name), lower(?)) > 0 THEN 0 ELSE 1 END, '
+            'coalesce(stars, -1) DESC, id DESC LIMIT ?',
+            [*args, phrase, phrase, phrase, limit],
+        ).fetchall()
+    return {'items': [dict(row) for row in rows]}
+
+
+@app.get('/api/catalog')
+def catalog(
+    offset: int = 0,
+    limit: int = 20,
+    q: str = '',
+    category: str = '',
+    platform: str = '',
+    sort: str = 'relevance',
+):
+    if offset < 0 or limit < 1 or limit > 100:
+        raise HTTPException(400, '分页参数无效')
+    if sort not in {'relevance', 'newest', 'stars', 'updated'}:
+        raise HTTPException(400, '排序方式无效')
+    conditions, args, terms = catalog_conditions(q, category, platform)
+    phrase = q.strip()
+    if sort == 'stars':
+        order = 'ORDER BY CASE WHEN stars IS NULL THEN 1 ELSE 0 END, stars DESC, id DESC'
+        order_args = []
+    elif sort == 'updated':
+        order = "ORDER BY CASE WHEN updated_at = '' THEN 1 ELSE 0 END, updated_at DESC, id DESC"
+        order_args = []
+    elif sort == 'newest':
+        order = 'ORDER BY id DESC'
+        order_args = []
+    elif terms:
+        order = (
+            'ORDER BY CASE WHEN lower(name) = lower(?) THEN 0 ELSE 1 END, '
+            "CASE WHEN lower(name) LIKE lower(?) || '%' THEN 0 ELSE 1 END, "
+            'CASE WHEN instr(lower(name), lower(?)) > 0 THEN 0 ELSE 1 END, '
+            'CASE WHEN instr(lower(category), lower(?)) > 0 THEN 0 ELSE 1 END, '
+            'CASE WHEN instr(lower(tags), lower(?)) > 0 THEN 0 ELSE 1 END, '
+            'coalesce(stars, -1) DESC, id DESC'
+        )
+        order_args = [phrase, phrase, phrase, phrase, phrase]
+    else:
+        order = 'ORDER BY id DESC'
+        order_args = []
+    where = ' AND '.join(conditions)
+    with db() as conn:
+        total = conn.execute('SELECT count(*) FROM projects WHERE ' + where, args).fetchone()[0]
+        rows = conn.execute(
+            'SELECT * FROM projects WHERE ' + where + ' ' + order + ' LIMIT ? OFFSET ?',
+            [*args, *order_args, limit + 1, offset],
+        ).fetchall()
+    return {
+        'items': [row_project(row) for row in rows[:limit]],
+        'has_more': len(rows) > limit,
+        'total': total,
+        'terms': terms,
+    }
 
 @app.post('/api/projects')
 def create_project(project: Project):
