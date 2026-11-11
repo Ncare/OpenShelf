@@ -330,7 +330,7 @@ def export_backup():
         paths = {p.get(field, '') for p in projects_data for field in ('icon', 'screenshot')}
         for url in paths:
             name = url.removeprefix('/images/')
-            if url.startswith('/images/') and re.fullmatch(r'[a-f0-9]{32}\.(png|jpg|gif|webp|svg)', name):
+            if url.startswith('/images/') and re.fullmatch(r'[a-f0-9]{32}\.(png|jpg|gif|webp|svg|ico)', name):
                 file = IMAGES / name
                 if file.is_file():
                     archive.write(file, 'images/' + name)
@@ -363,7 +363,7 @@ async def restore_backup(file: UploadFile = File(...)):
                     url = getattr(project, field)
                     if url.startswith('/images/') and url not in images:
                         name = url.removeprefix('/images/')
-                        if not re.fullmatch(r'[a-f0-9]{32}\.(png|jpg|gif|webp|svg)', name):
+                        if not re.fullmatch(r'[a-f0-9]{32}\.(png|jpg|gif|webp|svg|ico)', name):
                             raise ValueError('图片路径无效')
                         images[url] = archive.read('images/' + name)
             if len({p.repo for p in projects_data}) != len(projects_data):
@@ -387,7 +387,7 @@ async def restore_backup(file: UploadFile = File(...)):
 @app.post('/api/download-image')
 async def download_image(image: ImageRequest):
     parsed = urlparse(image.url)
-    allowed = ('raw.githubusercontent.com', 'github.com', 'user-images.githubusercontent.com', 'private-user-images.githubusercontent.com', 'daeuniverse.org')
+    allowed = ('raw.githubusercontent.com', 'github.com', 'user-images.githubusercontent.com', 'private-user-images.githubusercontent.com', 'daeuniverse.org', 'cdn.nodeimage.com')
     if parsed.scheme != 'https' or parsed.hostname not in allowed or parsed.port not in (None, 443):
         raise HTTPException(400, '该图片来源暂不支持自动保存，请手动上传')
     try:
@@ -412,7 +412,7 @@ async def download_image(image: ImageRequest):
         raise HTTPException(502, '图片下载失败，请尝试手动上传')
 
 def save_image(data: bytes, max_size: int = 5 * 1024 * 1024):
-    signatures = [(b'\x89PNG\r\n\x1a\n', '.png'), (b'\xff\xd8\xff', '.jpg'), (b'GIF87a', '.gif'), (b'GIF89a', '.gif'), (b'RIFF', '.webp')]
+    signatures = [(b'\x89PNG\r\n\x1a\n', '.png'), (b'\xff\xd8\xff', '.jpg'), (b'GIF87a', '.gif'), (b'GIF89a', '.gif'), (b'RIFF', '.webp'), (b'\x00\x00\x01\x00', '.ico')]
     suffix = next ( (ext for magic, ext in signatures if data.startswith(magic) and (ext != '.webp' or data[8:12] == b'WEBP')), None)
     if len(data) > max_size:
         raise HTTPException(400, f'图片超过 {max_size // (1024 * 1024)} MB，请选择更小的图片')
