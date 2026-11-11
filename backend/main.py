@@ -252,7 +252,13 @@ async def extract(data: RepoRequest):
         async with httpx.AsyncClient(timeout=20, follow_redirects=False) as client:
             response = await client.get(f'https://api.github.com/repos/{owner}/{name}', headers=headers)
             if response.status_code != 200:
-                raise HTTPException(response.status_code if response.status_code in (404, 403) else 502, f'GitHub 获取失败（{response.status_code}），可手动填写')
+                if response.status_code == 401:
+                    raise HTTPException(401, 'GitHub Token 无效或已过期，请检查设置')
+                if response.status_code == 403:
+                    remaining = response.headers.get('x-ratelimit-remaining')
+                    detail = 'GitHub API 请求额度已用完，请稍后重试或检查 Token' if remaining == '0' else 'GitHub 拒绝访问，请检查 Token 权限或仓库可见性'
+                    raise HTTPException(403, detail)
+                raise HTTPException(response.status_code if response.status_code == 404 else 502, f'GitHub 获取失败（HTTP {response.status_code}），可手动填写')
             info = response.json()
             readme_response = await client.get(f'https://api.github.com/repos/{owner}/{name}/readme', headers=headers)
             readme = ''
@@ -315,8 +321,17 @@ async def extract(data: RepoRequest):
                     record_ai_usage(result['repo'], config['ai_model'], '失败', payload.get('usage') if isinstance(payload, dict) else None, request_body, ai.text if ai is not None else '请求失败，未收到响应')
                     result['warning'] = 'AI 整理失败，已保留基础提取结果'
             return result
+    except httpx.TimeoutException:
+        raise HTTPException(504, '连接 GitHub 超时，请检查容器网络、代理和 DNS')
+    except httpx.ConnectError as exc:
+        reason = str(exc).lower()
+        if 'certificate' in reason or 'ssl' in reason:
+            raise HTTPException(502, 'GitHub TLS 证书验证失败，请检查系统时间、代理和证书')
+        if 'name or service' in reason or 'resolve' in reason or 'getaddrinfo' in reason:
+            raise HTTPException(502, '无法解析 GitHub 域名，请检查容器 DNS')
+        raise HTTPException(502, '无法连接 GitHub，请检查容器网络和代理设置')
     except httpx.HTTPError:
-        raise HTTPException(502, '无法连接 GitHub，可手动填写')
+        raise HTTPException(502, 'GitHub 网络请求失败，请检查容器网络和代理设置')
 
 @app.get('/api/backup')
 def export_backup():
