@@ -425,6 +425,27 @@ def save_image(data: bytes, max_size: int = 5 * 1024 * 1024):
             allowed_attrs = {'viewBox', 'width', 'height', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'd', 'points', 'fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-opacity', 'opacity', 'transform', 'id', 'offset', 'stop-color', 'stop-opacity', 'clip-path', 'mask', 'gradientUnits', 'gradientTransform', 'preserveAspectRatio', 'version'}
             if root.tag != '{http://www.w3.org/2000/svg}svg':
                 raise ValueError('not svg')
+            def clean_metadata(element):
+                for child in list(element):
+                    if child.tag == '{http://www.w3.org/2000/svg}metadata' or child.tag.startswith('{http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd}'):
+                        element.remove(child)
+                    else:
+                        clean_metadata(child)
+                for key in list(element.attrib):
+                    if key.startswith('{http://www.inkscape.org/namespaces/inkscape}') or key.startswith('{http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd}'):
+                        del element.attrib[key]
+                style = element.attrib.pop('style', '')
+                if style:
+                    for declaration in style.split(';'):
+                        if not declaration.strip():
+                            continue
+                        if ':' not in declaration:
+                            raise ValueError('unsupported style')
+                        name, value = (part.strip() for part in declaration.split(':', 1))
+                        if name not in allowed_attrs or not re.fullmatch(r'[A-Za-z0-9#.,%+() _-]+', value):
+                            raise ValueError('unsupported style')
+                        element.attrib[name] = value
+            clean_metadata(root)
             for element in root.iter():
                 if not element.tag.startswith('{http://www.w3.org/2000/svg}') or element.tag.split('}', 1)[1] not in allowed_tags:
                     raise ValueError('unsupported element')
