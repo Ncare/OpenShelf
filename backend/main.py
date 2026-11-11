@@ -284,7 +284,7 @@ async def extract(data: RepoRequest):
                 url = urljoin(f'https://raw.githubusercontent.com/{owner}/{name}/{info["default_branch"]}/', source)
                 if urlparse(url).scheme == 'https' and url not in candidates:
                     candidates.append(url)
-            result = {'repo': normalize_repo(data.repo), 'name': info['name'], 'description': info.get('description') or '', 'category': '', 'platforms': platforms or ['待确认'], 'tags': info.get('topics', []), 'stars': info.get('stargazers_count'), 'license': (info.get('license') or {}).get('spdx_id') or '', 'updated_at': info.get('updated_at') or '', 'screenshot': '', 'published': False, 'candidates': candidates[:12], 'icon_candidate': next((url for url in candidates if re.search(r'(^|[/_.-])(icon|logo)([/_.-]|$)', urlparse(url).path, re.I)), ''), 'warning': ''}
+            result = {'repo': normalize_repo(data.repo), 'name': info['name'], 'description': info.get('description') or '', 'category': '', 'platforms': platforms or ['待确认'], 'tags': info.get('topics', []), 'stars': info.get('stargazers_count'), 'license': (info.get('license') or {}).get('spdx_id') or '', 'updated_at': info.get('updated_at') or '', 'screenshot': '', 'published': False, 'candidates': candidates[:100], 'icon_candidate': next((url for url in candidates if re.search(r'(^|[/_.-])(icon|logo)([/_.-]|$)', urlparse(url).path, re.I)), ''), 'warning': ''}
             lower = text.lower()
             rules = {'开发工具': ('developer', 'development', 'programming', 'code editor'), '设计创作': ('drawing', 'design tool', 'whiteboard'), '媒体工具': ('photo', 'video', 'music', 'media'), '效率工具': ('notes', 'productivity', 'task management')}
             available = {entry['name'] for entry in categories()}
