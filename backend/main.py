@@ -523,7 +523,7 @@ async def restore_backup(file: UploadFile = File(...)):
 @app.post('/api/download-image')
 async def download_image(image: ImageRequest):
     parsed = urlparse(image.url)
-    allowed = ('raw.githubusercontent.com', 'github.com', 'user-images.githubusercontent.com', 'private-user-images.githubusercontent.com', 'daeuniverse.org', 'cdn.nodeimage.com')
+    allowed = ('raw.githubusercontent.com', 'github.com', 'user-images.githubusercontent.com', 'private-user-images.githubusercontent.com', 'daeuniverse.org', 'cdn.nodeimage.com', 'dl.dbxio.com')
     if parsed.scheme != 'https' or parsed.hostname not in allowed or parsed.port not in (None, 443):
         raise HTTPException(400, '该图片来源暂不支持自动保存，请手动上传')
     try:
